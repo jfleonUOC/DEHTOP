@@ -1,0 +1,12 @@
+# Files / Patterns to be ignored
+inputs/
+lib/
+test/
+output/
+.vscode/
+*/ref/
+*.csv
+*.xlsx
+*.html
+*.log
+*cache*
