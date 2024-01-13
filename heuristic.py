@@ -3,6 +3,7 @@ import copy
 import math
 import random
 import operator
+from tqdm import tqdm
 import numpy as np
 
 from aux_objects import Edge, Route, Solution
@@ -105,6 +106,7 @@ def compute_sol(fleetSize, routeMaxCost, nodes, sav_list, agent, seed):
     sol = dummySolution(routeMaxCost, nodes) # compute the dummy solution
     #TODO: create an "efficiency list" that allows looping
     savList = copy.copy(sav_list) # make a shallow copy of the savings list since it will be modified
+    progress_bar = tqdm(total=len(sav_list), desc="Processing")
     while len(savList) > 0: # list is not empty
         # DEHTOP mod ---
         # The merging node is selected based on the reinf. learning algorithm
@@ -116,11 +118,9 @@ def compute_sol(fleetSize, routeMaxCost, nodes, sav_list, agent, seed):
         else: # use RL agent
             ijEdge = select_edge(savList, agent, seed)
         print(f"> merging {ijEdge}")
-        # i_node = agent.select_action()
-        # j_node = agent.select_action()
-        # ijEdge = savList.pop(position) # select the next edge from the list
         ijEdge_idx = savList.index(ijEdge)
         savList.pop(ijEdge_idx)
+        progress_bar.update(1)
         # --------------
         sol, mergeOk = merge_edge(sol, ijEdge, routeMaxCost)
         if mergeOk: print("> merge OK !!")
@@ -129,6 +129,7 @@ def compute_sol(fleetSize, routeMaxCost, nodes, sav_list, agent, seed):
             jiEdge = ijEdge.invEdge
             if jiEdge in savList:
                 savList.remove(jiEdge)
+                progress_bar.update(1)
         # printRoutes(sol)
 
     # sort the list of routes in sol by reward (reward) and delete extra routes
@@ -139,6 +140,7 @@ def compute_sol(fleetSize, routeMaxCost, nodes, sav_list, agent, seed):
         sol.routes.remove(route) # delete extra route
     #TODO: make sure that the drone type number constrain is respected!
 
+    progress_bar.close()
     return sol
 
 def merge_edge(sol, ijEdge, routeMaxCost):
@@ -205,10 +207,12 @@ def checkMergingConditions(iNode, jNode, iRoute, jRoute, ijEdge, routeMaxCost, v
     # else, merging is feasible
     return True
 
-def select_edge(savings_list, rl_agent, inst_seed, alg = 1):
+def select_edge(savings_list, rl_agent, inst_seed, alg = 0):
     """ Select edge to merge based on (alg=1) epsilon-greedy or (alg=2) Upper Confidence Bounds """
     efficiency_list = compute_efficiency(savings_list, rl_agent, inst_seed)
-    if alg == 1: # 1. Epsilon-greedy
+    if alg == 0: # 0. Greedy (offline training)
+        edge = efficiency_list[0]
+    elif alg == 1: # 1. Epsilon-greedy
         edge = epsilonGreedy(efficiency_list)
     else: # 2. Upper Confidence Bounds
         edge = UBC(efficiency_list)
@@ -232,8 +236,10 @@ def compute_efficiency(savings_list, rl_agent, inst_seed, alpha=0.5):
         # determine rewards
         # print(f"node: {iNode}, drone: {drone}, weather: {i_weather}")
         # print(f"node: {jNode}, drone: {drone}, weather: {j_weather}")
-        iNode.reward = rl_agent.get_estimated_reward(iNode, drone, i_weather)
-        jNode.reward = rl_agent.get_estimated_reward(jNode, drone, j_weather)
+        # iNode.reward = rl_agent.get_estimated_reward(iNode, drone, i_weather)
+        # jNode.reward = rl_agent.get_estimated_reward(jNode, drone, j_weather)
+        iNode.reward = rl_agent.get_estimated_reward(iNode, i_weather)
+        jNode.reward = rl_agent.get_estimated_reward(jNode, j_weather)
         edgeReward = iNode.reward + jNode.reward
         # compute efficiency
         #TODO: scale up the edgeReward component, which is <= 1
@@ -281,15 +287,17 @@ def assign_drones(route1, route2):
 if __name__ == "__main__":
     # read instance data
     print("*** READING DATA ***")
-    file_name = r"data2/p1.2.a.txt"
-    seed = 3 #TODO: to be read from the instance or from the test
+    file_name = r"data/p1.2.a.txt"
+    test_seed = str(3) #TODO: to be read from the test file: represents the variablity for that particular test
+    instance_seed = test_seed+file_name
     fleetSize, routeMaxCost, nodes = read_instance(file_name)
 
     # create RL agent
     agent = Agent(nodes)
     # print(agent.act_table)
     print("*** SIMULATING DATA ***")
-    historical_data = generate_historical_data(100, nodes, seed)
+    # use the file name as seed to ensure that all test are based on the same historical data
+    historical_data = generate_historical_data(100, nodes, seed=file_name)
     print("*** TRAINING AGENT ***")
     train_agent(agent, historical_data)
     print(agent.act_table)
@@ -300,18 +308,18 @@ if __name__ == "__main__":
 
     # compute benchmark
     print("*** COMPUTING BENCHMARK ***")
-    benchmark = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, None, seed)   
+    benchmark = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, None, instance_seed)   
 
     # compute solution
     print("*** COMPUTING SOLUTION ***")
-    sol = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, agent, seed)   
+    sol = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, agent, instance_seed)   
 
     # emulate proposed solutions
     print("*** RESULTS BENCHMARK ***")
     printRoutes(benchmark)
-    emulation(benchmark, routeMaxCost, seed)
+    emulation(benchmark, routeMaxCost, instance_seed)
     print(benchmark)
     print("*** RESULTS SOLUTION ***")
     printRoutes(sol)
-    emulation(sol, routeMaxCost, seed)
+    emulation(sol, routeMaxCost, instance_seed)
     print(sol)

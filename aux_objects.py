@@ -76,4 +76,4 @@ class Solution:
         self.reward_sim = 0.0 # sol reward after simulation (stoch/dynamic conditions)
 
     def __str__(self):
-        return f"routes: {len(self.routes)} \n cost: {self.cost}, real reward: {self.reward_sim}"
+        return f"routes: {len(self.routes)} \ncost: {self.cost}, real reward: {self.reward_sim}"
