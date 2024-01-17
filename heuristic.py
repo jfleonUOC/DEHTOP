@@ -7,7 +7,7 @@ from tqdm import tqdm
 import numpy as np
 
 from aux_objects import Edge, Route, Solution
-from aux_functions import read_tests, read_instance, printRoutes
+from aux_functions import read_tests, read_instance, printRoutes, graphRoutes
 from reinflearn import Agent, train_agent, generate_historical_data
 from emulation import emulation, get_conditions
 
@@ -382,15 +382,20 @@ def run_test(file_name, testSeed):
     # printRoutes(benchmark)
     emulation(benchmark, routeMaxCost, instance_seed)
     # print(benchmark)
+    figure1 = graphRoutes(nodes, benchmark, instance_seed)
+
     print("*** RESULTS SOLUTION ***")
     # printRoutes(sol)
     emulation(sol, routeMaxCost, instance_seed)
     # print(sol)
-
+    figure2 = graphRoutes(nodes, sol, instance_seed)
+    
+    figure1.show()
+    figure2.show()
 
 if __name__ == "__main__":
 
     file_name = r"data/p1.2.a.txt"
-    for i in range(7):
+    for i in range(5):
         print(f"{i =}")
         run_test(file_name,str(i))

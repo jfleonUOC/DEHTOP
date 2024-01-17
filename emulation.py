@@ -12,7 +12,7 @@ def emulation(sol, routeMaxCost, seed, print_results=True):
     for route in sol.routes:
         routeReward = 0 # route reward in this run
         routeCost = 0 # time- or distance-based cost
-        for e in route.edges:
+        for e in route.edges[:-1]:
             node = e.end # end node of the edge
             # drone = route.drone_type
             weather = get_conditions(node, seed)
