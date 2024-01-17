@@ -6,7 +6,7 @@ from aux_objects import Node
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
                 EMULATION OF REAL VALUES IN A SOL
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-def emulation(sol, routeMaxCost, seed):
+def emulation(sol, routeMaxCost, seed, print_results=True):
     # This code assumes binary random rewards on each node 
     sol.reward_sim = 0
     for route in sol.routes:
@@ -17,10 +17,11 @@ def emulation(sol, routeMaxCost, seed):
             # drone = route.drone_type
             weather = get_conditions(node, seed)
             # reward = getBinaryRandomReward(drone, weather, node, seed=seed)
-            reward = getBinaryRandomReward(weather, node, seed=seed)
+            reward = getBinaryRandomReward(node, weather, seed=seed)
+            node.realReward = reward
             routeReward += reward
             # if reward != 0: print(f"node with reward: {node} ; drone = {drone}, weather = {weather}")
-            if reward != 0: print(f"node with reward: {node} ; weather = {weather}")
+            # if reward != 0: print(f"node with reward: {node} ; weather = {weather}")
             edgeCost = e.cost
             routeCost += edgeCost
         
@@ -29,11 +30,13 @@ def emulation(sol, routeMaxCost, seed):
             routeReward = 0 # penalty for violating the max time allowed per route
 
         sol.reward_sim += routeReward
+    
+    if print_results: printEmuRoutes(sol)
 
 
 # DEHTOP mod ---
 # def getBinaryRandomReward(drone, weather, node, seed, verbose=False):
-def getBinaryRandomReward(weather, node, seed, verbose=False):
+def getBinaryRandomReward(node, weather, seed, verbose=False):
     """ Generates the binary random reward for node based on conditions """
     #TODO: use the global seed to always generate the same output
     # b_0, b_d, b_w = getCoeficients(node, drone)
@@ -60,6 +63,21 @@ def get_conditions(node, seed):
     random.seed(seed + str(node.ID))
     [weather] = random.choices([0,1],[0.5,0.5])
     return weather
+
+def printEmuRoutes(sol):
+    """ Print routes in a solution """
+    print(f"*SOLUTION ROUTES*")
+    for route in sol.routes:
+        print("0", end = "")
+        for e in route.edges:
+            if e.end.realReward != 0:
+                print(f"->{e.end.ID}*", end="")
+            else:
+                print(f"->{e.end.ID}", end="")
+        print("\nRoute det reward:", route.reward, "; det cost:", route.cost)
+    print(f"*SUMMARY*")
+    print(f"routes: {len(sol.routes)} \ncost: {sol.cost}, real reward: {sol.reward_sim}")
+
 
 # --------------
 if __name__ == "__main__":

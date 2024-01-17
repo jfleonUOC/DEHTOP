@@ -21,8 +21,8 @@ class Agent:
         node_list = [node.ID for node in self.nodes]
         # combinations = list(product(self.drones, self.weather, node_list, [0], [0]))
         # columns_names = ["drones","weather","nodes", "value", "visited"]
-        combinations = list(product(self.weather, node_list, [0], [0]))
-        columns_names = ["weather","nodes", "value", "visited"]
+        combinations = list(product(node_list, self.weather, [0], [0]))
+        columns_names = ["nodes", "weather", "value", "visited"]
         table = pd.DataFrame(combinations, columns=columns_names)
 
         return table
@@ -81,10 +81,10 @@ def generate_historical_data(events, nodes, seed, weather = [0,1]):
     # node_list = [x for x in range(1, nodes+1)]
     node_list = [node.ID for node in nodes]
     # combinations = list(product(drones, weather, node_list))
-    combinations = list(product(weather, node_list))
-    for _ in tqdm(range(events)):
+    combinations = list(product(node_list, weather))
+    for i in tqdm(range(events)):
         for comb in combinations:
-            reward = getBinaryRandomReward(*comb, seed, verbose=False)
+            reward = getBinaryRandomReward(*comb, seed+str(i), verbose=False)
             event = list(comb)
             event.append(reward)
             historical_data.append(event)
@@ -97,7 +97,7 @@ def train_agent(agent, historical_data):
         # drone, weather, node, reward = event
         # agent.update_act_value(drone, weather, node, reward)
         weather, node, reward = event
-        agent.update_act_value(weather, node, reward)
+        agent.update_act_value(node, weather, reward)
     return
 
 if __name__ == "__main__":

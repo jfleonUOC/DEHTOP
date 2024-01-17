@@ -26,6 +26,8 @@ class Node:
         self.ndEdge = None # arc from this node to finish depot
         self.isLinkedToStart = False # linked to start depot?
         self.isLindedToFinish = False # linked to finish depot?
+        self.timesVisited = 0 # how many times has been the node visited in the past
+        self.realReward = 0 # real reward during emulation
 
     def __str__(self):
         return f"Node {self.ID}"

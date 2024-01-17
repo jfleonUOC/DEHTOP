@@ -101,29 +101,43 @@ def dummySolution(routeMaxCost, nodes):
             MERGING PROCESS IN THE PJ'S HEURISTIC
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-def compute_sol(fleetSize, routeMaxCost, nodes, sav_list, agent, seed):
+def compute_sol(fleetSize, routeMaxCost, nodes, sav_list, agent, seed, scale=10, verbose=False):
     """ Perform the BR edge-selection & routing-merging iterative process """
     sol = dummySolution(routeMaxCost, nodes) # compute the dummy solution
     #TODO: create an "efficiency list" that allows looping
     savList = copy.copy(sav_list) # make a shallow copy of the savings list since it will be modified
+
+    if isinstance(agent, list): # no RL agent, but historical data -> use savings
+        # use historical records to recompute the efficiency based on average reward for each node
+        savList = compute_avg_rewards(savList, agent, scale=scale)
+        if verbose:
+            print(agent)
+            for node in nodes:
+                print(f"{node}, {node.reward =}, {node.timesVisited}")
+        use_agent = False
+    else: # use RL agent
+        use_agent = True
+    
+
     progress_bar = tqdm(total=len(sav_list), desc="Processing")
     while len(savList) > 0: # list is not empty
         # DEHTOP mod ---
         # The merging node is selected based on the reinf. learning algorithm
         # instead of a on biased-randomized position of an ordered efficiency list
         # recalculate effList
-        print(f"* Efficiency list lenght: {len(savList)} *")
-        if agent == None: # use savings
+        if not use_agent:
             ijEdge = savList[0]
         else: # use RL agent
-            ijEdge = select_edge(savList, agent, seed)
-        print(f"> merging {ijEdge}")
+            ijEdge = select_edge(savList, agent, seed, scale=scale)
+        if verbose:
+            print(f"* Efficiency list lenght: {len(savList)} *")
+            print(f"> merging {ijEdge}")
         ijEdge_idx = savList.index(ijEdge)
         savList.pop(ijEdge_idx)
         progress_bar.update(1)
         # --------------
         sol, mergeOk = merge_edge(sol, ijEdge, routeMaxCost)
-        if mergeOk: print("> merge OK !!")
+        if mergeOk and verbose: print("> merge OK !!")
         if not mergeOk:
         # if still in list, delete edge (j, i) since it will not be used
             jiEdge = ijEdge.invEdge
@@ -151,7 +165,7 @@ def merge_edge(sol, ijEdge, routeMaxCost):
     iRoute = iNode.inRoute
     jRoute = jNode.inRoute
     # check if merge is possible
-    isMergeFeasible = checkMergingConditions(iNode, jNode, iRoute, jRoute, ijEdge, routeMaxCost)
+    isMergeFeasible = checkMergingConditions(iNode, jNode, iRoute, jRoute, ijEdge, routeMaxCost, verbose=False)
     # if all necessary conditions are satisfied, merge and delete edge (j, i)
     if isMergeFeasible == True:
         # iRoute will contain edge (i, finish)
@@ -207,9 +221,9 @@ def checkMergingConditions(iNode, jNode, iRoute, jRoute, ijEdge, routeMaxCost, v
     # else, merging is feasible
     return True
 
-def select_edge(savings_list, rl_agent, inst_seed, alg = 0):
+def select_edge(savings_list, rl_agent, inst_seed, alg = 0, scale=10):
     """ Select edge to merge based on (alg=1) epsilon-greedy or (alg=2) Upper Confidence Bounds """
-    efficiency_list = compute_efficiency(savings_list, rl_agent, inst_seed)
+    efficiency_list = compute_efficiency(savings_list, rl_agent, inst_seed, scale=scale)
     if alg == 0: # 0. Greedy (offline training)
         edge = efficiency_list[0]
     elif alg == 1: # 1. Epsilon-greedy
@@ -218,21 +232,21 @@ def select_edge(savings_list, rl_agent, inst_seed, alg = 0):
         edge = UBC(efficiency_list)
     return edge
 
-def compute_efficiency(savings_list, rl_agent, inst_seed, alpha=0.5):
+def compute_efficiency(savings_list, rl_agent, inst_seed, alpha=0.5, scale=10):
     eff_list = copy.copy(savings_list)
     for edge in eff_list:
         # determine the nodes i < j that define the edge
         iNode = edge.origin
         jNode = edge.end
         # determine the routes associated with each node
-        iRoute = iNode.inRoute
-        jRoute = jNode.inRoute
+        # iRoute = iNode.inRoute
+        # jRoute = jNode.inRoute
         # determine dynamic conditions for each node
         i_weather = get_conditions(iNode, inst_seed)
         j_weather = get_conditions(jNode, inst_seed)
         #TODO: check that drone type is (1) the same in both routes, (2) allowed - number of drones is limited
-        iRoute, jRoute = assign_drones(iRoute, jRoute)
-        drone = iRoute.drone_type
+        # iRoute, jRoute = assign_drones(iRoute, jRoute)
+        # drone = iRoute.drone_type
         # determine rewards
         # print(f"node: {iNode}, drone: {drone}, weather: {i_weather}")
         # print(f"node: {jNode}, drone: {drone}, weather: {j_weather}")
@@ -243,11 +257,56 @@ def compute_efficiency(savings_list, rl_agent, inst_seed, alpha=0.5):
         edgeReward = iNode.reward + jNode.reward
         # compute efficiency
         #TODO: scale up the edgeReward component, which is <= 1
-        edge.efficiency = alpha * edge.savings + (1 - alpha) * edgeReward * 10
+        edge.efficiency = alpha * edge.savings + (1 - alpha) * edgeReward * scale
     # sort the list of edges from higher to lower efficiency
     eff_list.sort(key = operator.attrgetter("efficiency"), reverse = True)
 
     return eff_list
+
+def compute_avg_rewards(savings_list, historical_data, alpha=0.5, scale=10):
+    eff_list = copy.copy(savings_list)
+    for event in historical_data:
+        # print(f"{event =}")
+        node_id = event[0]
+        # print(f"{node_id =}")
+        reward = event[-1]
+        # print(f"{reward =}")
+        node = find_node_in_eff_list(node_id, eff_list, verbose=False)
+        # if find_node_in_eff_list(node_id, eff_list, verbose=True) is not None:
+        # print(f"{node =}")
+        if node is not None:
+            if node.timesVisited == 0: # first time visit
+                node.reward = reward
+            else:
+                # new_avg = old_avg+(reward-old_avg)/new_count
+                node.reward = node.reward + (reward - node.reward)/node.timesVisited
+                # node.reward += reward
+            node.timesVisited += 1
+
+    for edge in eff_list:
+        # determine the nodes i < j that define the edge
+        iNode = edge.origin
+        jNode = edge.end
+        edgeReward = iNode.reward + jNode.reward
+        # compute efficiency
+        #TODO: scale up the edgeReward component, which is <= 1
+        edge.efficiency = alpha * edge.savings + (1 - alpha) * edgeReward * scale
+    # sort the list of edges from higher to lower efficiency
+    eff_list.sort(key = operator.attrgetter("efficiency"), reverse = True)
+
+    return eff_list
+
+def find_node_in_eff_list(nodeID, efficiencyList, verbose=False):
+    for edge in efficiencyList:
+        node_ori = edge.origin
+        node_end = edge.end
+        # print(f"{node_ori.ID =}")
+        if node_ori.ID == nodeID:
+            return node_ori
+        elif node_end.ID == nodeID:
+            return node_end
+    if verbose: print(f"{nodeID =} is not in efficiency list")
+    return None
 
 def epsilonGreedy(eff_list, epsilon = 0.1):
     random.seed(None) # initialize the random seed for the purpose of RL agent selection
@@ -284,42 +343,54 @@ def assign_drones(route1, route2):
     # if they are equal and not None, simply return the unmodified routes
     return route1, route2
 
-if __name__ == "__main__":
+def run_test(file_name, testSeed):
     # read instance data
     print("*** READING DATA ***")
-    file_name = r"data/p1.2.a.txt"
-    test_seed = str(3) #TODO: to be read from the test file: represents the variablity for that particular test
-    instance_seed = test_seed+file_name
     fleetSize, routeMaxCost, nodes = read_instance(file_name)
+    test_seed = testSeed #TODO: to be read from the test file: represents the variablity for that particular test
+    instance_seed = test_seed+file_name
 
     # create RL agent
     agent = Agent(nodes)
     # print(agent.act_table)
     print("*** SIMULATING DATA ***")
     # use the file name as seed to ensure that all test are based on the same historical data
-    historical_data = generate_historical_data(100, nodes, seed=file_name)
+    historical_data = generate_historical_data(10, nodes, seed=file_name)
     print("*** TRAINING AGENT ***")
     train_agent(agent, historical_data)
-    print(agent.act_table)
+    # print(agent.act_table)
 
     print("*** RUNNING HEURISTIC ***")
     savings_list = generateSavingsList(nodes)
     # print(savings_list)
 
+    # weather
+    # for node in nodes:
+    #     print(f"{node}, {get_conditions(node, instance_seed) =}")
+
+    scale = 100
     # compute benchmark
     print("*** COMPUTING BENCHMARK ***")
-    benchmark = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, None, instance_seed)   
+    benchmark = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, historical_data, instance_seed, scale=scale)   
 
     # compute solution
     print("*** COMPUTING SOLUTION ***")
-    sol = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, agent, instance_seed)   
+    sol = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, agent, instance_seed, scale=scale)   
 
     # emulate proposed solutions
     print("*** RESULTS BENCHMARK ***")
-    printRoutes(benchmark)
+    # printRoutes(benchmark)
     emulation(benchmark, routeMaxCost, instance_seed)
-    print(benchmark)
+    # print(benchmark)
     print("*** RESULTS SOLUTION ***")
-    printRoutes(sol)
+    # printRoutes(sol)
     emulation(sol, routeMaxCost, instance_seed)
-    print(sol)
+    # print(sol)
+
+
+if __name__ == "__main__":
+
+    file_name = r"data/p1.2.a.txt"
+    for i in range(7):
+        print(f"{i =}")
+        run_test(file_name,str(i))
