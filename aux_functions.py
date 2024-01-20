@@ -1,3 +1,4 @@
+import random
 import matplotlib.pyplot as plt
 from aux_objects import Test, Node
 from emulation import get_conditions
@@ -84,9 +85,69 @@ def graphRoutes(nodes, sol, seed):
         else:
             x_0.append(node.x)
             y_0.append(node.y)
-    plt.plot(x_1, y_1, "^")
-    plt.plot(x_0, y_0, "v")
+    plt.plot(x_1, y_1, marker="^", color="g", ms=8, linestyle="None")
+    plt.plot(x_0, y_0, marker="v", color="r", ms=8, linestyle="None")
     
     # plt.show()
 
     return fig 
+
+def generateInstance_old1(save_path, n_nodes, n_veh, max_cost, spread=20, seed=0):
+    rows = []
+    # config rows
+    first_row = f"n;{n_nodes}\n"
+    second_row = f"n;{n_veh}\n"
+    third_row = f"tmax;{max_cost}\n"
+    rows.extend([first_row, second_row, third_row])
+
+    # add nodes
+    random.seed(seed)
+    for node in range(n_nodes):
+        x = random.uniform(0, spread)
+        y = random.uniform(0, spread)
+        coords = f"{x:.3f};{y:.3f};0\n"
+        rows.append(coords)
+
+    # order first and final
+    print(rows)
+
+    # write instance
+    with open(save_path, "w") as outfile:
+        # outfile.write()
+        outfile.writelines(rows)
+    print(f"New instance created at: {save_path}")
+
+
+def generateInstance(save_path, n_nodes, n_veh, spread, seed=0):
+    rows = []
+    max_cost = spread * 1.8
+    # config rows
+    first_row = f"n;{n_nodes}\n"
+    second_row = f"n;{n_veh}\n"
+    third_row = f"tmax;{max_cost}\n"
+    rows.extend([first_row, second_row, third_row])
+
+    # add nodes
+    random.seed(seed)
+    for node in range(n_nodes-2):
+        x = random.uniform(0, spread)
+        y = random.uniform(0, spread)
+        coords = f"{x:.3f};{y:.3f};0\n"
+        rows.append(coords)
+
+    # add first and final
+    first_node = f"{0:.3f};{spread/2:.3f};0\n" 
+    last_node = f"{spread:.3f};{spread/2:.3f};0" 
+    rows.insert(3,first_node)
+    rows.append(last_node)
+    print(rows)
+
+    # write instance
+    with open(save_path, "w") as outfile:
+        # outfile.write()
+        outfile.writelines(rows)
+    print(f"New instance created at: {save_path}")
+
+if __name__ == "__main__":
+    file_name = "data/test_instance_02.txt"
+    generateInstance(file_name, n_nodes=15, n_veh=2, spread=10)

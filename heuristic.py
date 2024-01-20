@@ -5,6 +5,7 @@ import random
 import operator
 from tqdm import tqdm
 import numpy as np
+from scipy import stats
 
 from aux_objects import Edge, Route, Solution
 from aux_functions import read_tests, read_instance, printRoutes, graphRoutes
@@ -343,7 +344,7 @@ def assign_drones(route1, route2):
     # if they are equal and not None, simply return the unmodified routes
     return route1, route2
 
-def run_test(file_name, testSeed):
+def run_test(file_name, testSeed, printFigures=True):
     # read instance data
     print("*** READING DATA ***")
     fleetSize, routeMaxCost, nodes = read_instance(file_name)
@@ -382,20 +383,44 @@ def run_test(file_name, testSeed):
     # printRoutes(benchmark)
     emulation(benchmark, routeMaxCost, instance_seed)
     # print(benchmark)
-    figure1 = graphRoutes(nodes, benchmark, instance_seed)
 
     print("*** RESULTS SOLUTION ***")
     # printRoutes(sol)
     emulation(sol, routeMaxCost, instance_seed)
     # print(sol)
-    figure2 = graphRoutes(nodes, sol, instance_seed)
     
-    figure1.show()
-    figure2.show()
+    if printFigures:
+        figure1 = graphRoutes(nodes, benchmark, instance_seed)
+        figure2 = graphRoutes(nodes, sol, instance_seed)
+        figure1.show()
+        figure2.show()
+
+    return benchmark.reward_sim, sol.reward_sim
 
 if __name__ == "__main__":
 
-    file_name = r"data/p1.2.a.txt"
-    for i in range(5):
-        print(f"{i =}")
-        run_test(file_name,str(i))
+    # file_name = r"data/p1.2.a.txt"
+    file_name = r"data/test_instance_02.txt"
+
+    # single run:
+    run_test(file_name, testSeed=str(5))
+
+    # multi-run:
+    # for i in range(5):
+    #     print(f"{i =}")
+    #     run_test(file_name,str(i))
+
+    # statistical significance test
+    # print(f"T-TEST for {file_name}")
+    # ben_res = []
+    # sol_res = []
+    # for i in range(20):
+    #     print(f"{i =}")
+    #     ben, sol = run_test(file_name,str(i),printFigures=False)
+    #     ben_res.append(ben)
+    #     sol_res.append(sol)
+    # print(f"{ben_res =}")
+    # print(f"{sol_res =}")
+    # ttest = stats.ttest_ind(ben_res, sol_res)
+    # print(ttest)
+

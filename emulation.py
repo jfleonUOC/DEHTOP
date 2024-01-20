@@ -41,6 +41,7 @@ def getBinaryRandomReward(node, weather, seed, verbose=False):
     #TODO: use the global seed to always generate the same output
     # b_0, b_d, b_w = getCoeficients(node, drone)
     b_0, b_d, b_w = getCoeficients(node)
+    # print(f"{b_0 =}, {b_d =}, {b_w =}")
     linearCombination = b_0 + b_d + b_w * weather
     prob = 1 / (1 + math.exp(-linearCombination))
     # random.seed(seed + drone + str(weather) + str(node))
@@ -53,13 +54,14 @@ def getBinaryRandomReward(node, weather, seed, verbose=False):
 def getCoeficients(node):
     """ Obtains the coeficientes for a given node """
     # TODO: look in fixed table given the node
-    b_0 = 0.1
-    b_d = 0.1
-    b_w = 1.0
+    b_0 = 0.0
+    b_d = 0.0
+    b_w = 2.0
     return b_0, b_d, b_w
 
 def get_conditions(node, seed):
     # Obtain weather conditions for instance seed at given node
+    # conditions: wind, waves, visibility, rain
     random.seed(seed + str(node.ID))
     [weather] = random.choices([0,1],[0.5,0.5])
     return weather
@@ -83,7 +85,7 @@ def printEmuRoutes(sol):
 if __name__ == "__main__":
     node = Node(1,0,0,0)
     # r = getBinaryRandomReward(drone="A",weather=0,node=node.ID, seed=str(1), verbose=True)
-    r = getBinaryRandomReward(weather=0,node=node.ID, seed=str(1), verbose=True)
+    r = getBinaryRandomReward(weather=1,node=node.ID, seed=str(1), verbose=True)
     
     # Test for random.choices
     # a = []
