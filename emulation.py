@@ -15,9 +15,9 @@ def emulation(sol, routeMaxCost, seed, print_results=True):
         for e in route.edges[:-1]:
             node = e.end # end node of the edge
             # drone = route.drone_type
-            weather = get_conditions(node, seed)
+            weather = get_conditions(node.ID, seed)
             # reward = getBinaryRandomReward(drone, weather, node, seed=seed)
-            reward = getBinaryRandomReward(node, weather, seed=seed)
+            reward = getBinaryRandomReward(node.ID, weather, seed=seed)
             node.realReward = reward
             routeReward += reward
             # if reward != 0: print(f"node with reward: {node} ; drone = {drone}, weather = {weather}")
@@ -36,22 +36,22 @@ def emulation(sol, routeMaxCost, seed, print_results=True):
 
 # DEHTOP mod ---
 # def getBinaryRandomReward(drone, weather, node, seed, verbose=False):
-def getBinaryRandomReward(node, weather, seed, verbose=False):
+def getBinaryRandomReward(node_id, weather, seed, verbose=False):
     """ Generates the binary random reward for node based on conditions """
     #TODO: use the global seed to always generate the same output
     # b_0, b_d, b_w = getCoeficients(node, drone)
-    b_0, b_d, b_w = getCoeficients(node)
+    b_0, b_d, b_w = getCoeficients(node_id)
     # print(f"{b_0 =}, {b_d =}, {b_w =}")
     linearCombination = b_0 + b_d + b_w * weather
     prob = 1 / (1 + math.exp(-linearCombination))
     # random.seed(seed + drone + str(weather) + str(node))
-    random.seed(seed + str(weather) + str(node))
+    random.seed(seed + str(weather) + str(node_id))
     [reward] = random.choices([0,1],[1-prob, prob])
     if verbose:
         print(f"seed: {seed}; probability: {prob}; reward: {reward}")
     return reward
 
-def getCoeficients(node):
+def getCoeficients(node_id):
     """ Obtains the coeficientes for a given node """
     # TODO: look in fixed table given the node
     b_0 = 0.0
@@ -59,10 +59,10 @@ def getCoeficients(node):
     b_w = 2.0
     return b_0, b_d, b_w
 
-def get_conditions(node, seed):
+def get_conditions(node_id, seed):
     # Obtain weather conditions for instance seed at given node
     # conditions: wind, waves, visibility, rain
-    random.seed(seed + str(node.ID))
+    random.seed(seed + str(node_id))
     [weather] = random.choices([0,1],[0.5,0.5])
     return weather
 

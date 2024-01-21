@@ -149,5 +149,5 @@ def generateInstance(save_path, n_nodes, n_veh, spread, seed=0):
     print(f"New instance created at: {save_path}")
 
 if __name__ == "__main__":
-    file_name = "data/test_instance_02.txt"
-    generateInstance(file_name, n_nodes=15, n_veh=2, spread=10)
+    file_name = "data/test_instance_03.txt"
+    generateInstance(file_name, n_nodes=40, n_veh=4, spread=10)

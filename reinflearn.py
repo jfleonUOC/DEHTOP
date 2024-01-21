@@ -91,9 +91,9 @@ def generate_historical_data(events, nodes, seed, weather = [0,1]):
 
     return historical_data
 
-def train_agent(agent, historical_data):
+def train_agent(agent, historical_data, verbose=True):
     """ Train the agent based on historical data """
-    for event in tqdm(historical_data):
+    for event in tqdm(historical_data, disable=not verbose):
         # drone, weather, node, reward = event
         # agent.update_act_value(drone, weather, node, reward)
         weather, node, reward = event
