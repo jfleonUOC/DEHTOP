@@ -1,4 +1,3 @@
-''' Reviewed by Angel A. Juan 2023.06 for the TOP with stochastic / dynamic travel times '''
 
 class Test:
     ''' A class defining Test objects '''
@@ -27,6 +26,7 @@ class Node:
         self.isLinkedToStart = False # linked to start depot?
         self.isLindedToFinish = False # linked to finish depot?
         self.timesVisited = 0 # how many times has been the node visited in the past
+        self.probability = 0 # what is the probability of getting a reward
         self.realReward = 0 # real reward during emulation
 
     def __str__(self):
@@ -56,8 +56,7 @@ class Route:
          self.cost = 0.0 # cost of this route
          self.edges = [] # sorted edges in this route
          self.reward = 0.0 # total reward collected in this route
-         # new for the DEHTOP:
-         self.drone_type = None # Possible values: {"A", "M"} 
+        #  self.drone_type = None # Possible values: {"A", "M"} 
 
     def reverse(self): # e.g. 0 -> 2 -> 6 -> 0 becomes 0 -> 6 -> 2 -> 0
         size = len(self.edges)

@@ -79,7 +79,8 @@ def graphRoutes(nodes, sol, seed):
     x_1 = []
     y_1 = []
     for node in nodes:
-        if get_conditions(node, seed) == 1:
+        # if get_conditions(node, seed) == 1:
+        if node.probability > 0.5:
             x_1.append(node.x)
             y_1.append(node.y)
         else:
