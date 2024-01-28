@@ -1,4 +1,5 @@
 # import numpy as np
+import pickle
 import pandas as pd
 from itertools import product
 from tqdm import tqdm
@@ -78,6 +79,40 @@ def train_agent(agent, historical_data, verbose=True):
         node, wind, rain, visi, temp, reward = event
         agent.update_act_value(node, wind, rain, visi, temp, reward)
     return
+
+def export_agent_to_file(agent, output, verbose=True):
+    file_output = output[:-4] + "_agent.csv"
+    agent.act_table.to_csv(file_output)
+    if verbose: print(f"> agent exported to {file_output} ({agent.act_table.shape[0]} lines)")
+    return
+
+def import_agent_from_file(agent, input, verbose=True):
+    file_input = input[:-4] + "_agent.csv"
+    df_input = pd.read_csv(file_input)
+    len_input = df_input.shape[0]
+    len_base = agent.act_table.shape[0] 
+    if len_input == len_base:
+        agent.act_table = df_input
+        if verbose: print(f"> agent imported from {file_input} ({agent.act_table.shape[0]} lines)")
+    else:
+        print(f"ERROR| cannot import agent - lenght is different ({len_input} vs. {len_base})")
+
+    return agent
+
+def export_historical_data(historical_data, output):
+    file_output = output[:-4] + "_histdata"
+    with open(file_output, "wb") as file:
+        pickle.dump(historical_data, file)
+
+    return
+
+def import_historical_data(input):
+    file_input = input[:-4] + "_histdata"
+    with open(file_input, "rb") as file:
+        historical_data = pickle.load(file)
+
+    return historical_data
+
 
 if __name__ == "__main__":
     # create dummy nodes

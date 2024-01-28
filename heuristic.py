@@ -11,15 +11,15 @@ import matplotlib.pyplot as plt
 
 from aux_objects import Edge, Route, Solution
 from aux_functions import read_tests, read_instance, printRoutes, graphRoutes
-from reinflearn import Agent, train_agent, generate_historical_data
+from reinflearn import Agent, train_agent, generate_historical_data, export_agent_to_file, import_agent_from_file, export_historical_data, import_historical_data
 from emulation import emulation, get_conditions, getBinaryRandomReward
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
                     MULTI-START FRAMEWORK
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-def multistart(file_name, n_episodes, testSeed):
-
+def multistart(file_name, n_episodes, alpha, testSeed=str(0)):
+    """ Online learning along N episodes """
     # read instance data
     print("*** READING DATA ***")
     # fleetSize, routeMaxCost, nodes = read_instance(file_name)
@@ -41,7 +41,6 @@ def multistart(file_name, n_episodes, testSeed):
     savings_list_sol = generateSavingsList(nodes_sol)
     # print(savings_list)
 
-    scale = 100 #TODO: to be deleted! use alpha instead
     historical_data = []
     ben_episode_reward=[]
     sol_episode_reward=[]
@@ -51,7 +50,7 @@ def multistart(file_name, n_episodes, testSeed):
         # print(f"* COMPUTING EPISODE {episode} *")
         episode_seed = test_seed+str(episode)
 
-        benchmark = compute_sol(fleetSize, routeMaxCost, nodes_ben, savings_list_ben, historical_data, episode_seed, scale=scale, verbose=False)   
+        benchmark = compute_sol(fleetSize, routeMaxCost, nodes_ben, savings_list_ben, historical_data, episode_seed, alpha, verbose=False)   
         emulation(benchmark, routeMaxCost, episode_seed, print_results=False)
 
         # add historical data only for the visited nodes
@@ -66,7 +65,7 @@ def multistart(file_name, n_episodes, testSeed):
         # print(f"* COMPUTING EPISODE {episode} *")
         episode_seed = test_seed+str(episode)
 
-        sol = compute_sol(fleetSize, routeMaxCost, nodes_sol, savings_list_sol, agent, episode_seed, offline=True, scale=scale,verbose=False)   
+        sol = compute_sol(fleetSize, routeMaxCost, nodes_sol, savings_list_sol, agent, episode_seed, alpha, offline=True, verbose=False)   
         emulation(sol, routeMaxCost, episode_seed, print_results=False)
 
         # add historical data only for the visited nodes
@@ -79,13 +78,18 @@ def multistart(file_name, n_episodes, testSeed):
 
         sol_episode_reward.append(sol.reward_sim)
     
+    # export online trained agent
+    file_output = file_name[:-4] + "_online.csv"
+    export_agent_to_file(agent, file_output)
+
     # plot cumulated reward    
     ben_cumulated_reward = np.cumsum(ben_episode_reward)
     sol_cumulated_reward = np.cumsum(sol_episode_reward)
     episodes = [i+1 for i in range(n_episodes)]
     # moving average
-    ben_filtered_reward = uniform_filter1d(ben_episode_reward, size=20)
-    sol_filtered_reward = uniform_filter1d(sol_episode_reward, size=20)
+    size = int(round(n_episodes/10))
+    ben_filtered_reward = uniform_filter1d(ben_episode_reward, size=size)
+    sol_filtered_reward = uniform_filter1d(sol_episode_reward, size=size)
 
     fig, axs = plt.subplots(2)
     axs[0].plot(episodes,ben_cumulated_reward, color="green", label="benchmark")
@@ -204,21 +208,21 @@ def dummySolution(routeMaxCost, nodes):
             MERGING PROCESS IN THE PJ'S HEURISTIC
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-def compute_sol(fleetSize, routeMaxCost, nodes, sav_list, agent, seed, offline=True, scale=10, verbose=False):
+def compute_sol(fleetSize, routeMaxCost, nodes, sav_list, agent, seed, alpha, offline=True, verbose=False):
     """ Perform the BR edge-selection & routing-merging iterative process """
     sol = dummySolution(routeMaxCost, nodes) # compute the dummy solution
     savList = copy.copy(sav_list) # make a shallow copy of the savings list since it will be modified
 
     if isinstance(agent, list): # no RL agent, but historical data -> use savings
         # use historical records to recompute the efficiency based on average reward for each node
-        savList = compute_avg_rewards(savList, agent, scale=scale)
+        savList = compute_avg_rewards(savList, agent, alpha)
         if verbose:
             print(agent)
             for node in nodes:
                 print(f"{node}, {node.reward =}, {node.timesVisited}")
         use_agent = False
     else: # use RL agent
-        savList = compute_efficiency(savList, agent, seed, scale=scale)
+        savList = compute_efficiency(savList, agent, seed, alpha)
         use_agent = True
     
 
@@ -231,9 +235,9 @@ def compute_sol(fleetSize, routeMaxCost, nodes, sav_list, agent, seed, offline=T
             ijEdge = savList[0]
         else: # use RL agent
             if offline:
-                ijEdge = select_edge(savList, agent, seed, alg=0, scale=scale)
+                ijEdge = select_edge(savList, alg=0)
             else:
-                ijEdge = select_edge(savList, agent, seed, alg=1, scale=scale)
+                ijEdge = select_edge(savList, alg=1)
         if verbose:
             print(f"* Efficiency list lenght: {len(savList)} *")
             print(f"> merging {ijEdge}")
@@ -319,9 +323,8 @@ def checkMergingConditions(iNode, jNode, iRoute, jRoute, ijEdge, routeMaxCost, v
     # else, merging is feasible
     return True
 
-def select_edge(savings_list, rl_agent, inst_seed, alg = 0, scale=10):
+def select_edge(savings_list, alg = 0):
     """ Select edge to merge based on (alg=1) epsilon-greedy or (alg=2) Upper Confidence Bounds """
-    # efficiency_list = compute_efficiency(savings_list, rl_agent, inst_seed, scale=scale)
     efficiency_list = savings_list
     if alg == 0: # 0. Greedy (offline training)
         edge = efficiency_list[0]
@@ -331,7 +334,7 @@ def select_edge(savings_list, rl_agent, inst_seed, alg = 0, scale=10):
         edge = UBC(efficiency_list)
     return edge
 
-def compute_efficiency(savings_list, rl_agent, inst_seed, alpha=0.5, scale=10):
+def compute_efficiency(savings_list, rl_agent, inst_seed, alpha):
     eff_list = copy.copy(savings_list)
     for edge in eff_list:
         # determine the nodes i < j that define the edge
@@ -353,14 +356,13 @@ def compute_efficiency(savings_list, rl_agent, inst_seed, alpha=0.5, scale=10):
         jNode.reward = rl_agent.get_estimated_reward(jNode, wind_j, rain_j, visi_j, temp_j)
         edgeReward = iNode.reward + jNode.reward
         # compute efficiency
-        #TODO: scale up the edgeReward component, which is <= 1
-        edge.efficiency = alpha * edge.savings + (1 - alpha) * edgeReward * scale
+        edge.efficiency = alpha * edge.savings + (1 - alpha) * edgeReward
     # sort the list of edges from higher to lower efficiency
     eff_list.sort(key = operator.attrgetter("efficiency"), reverse = True)
 
     return eff_list
 
-def compute_avg_rewards(savings_list, historical_data, alpha=0.5, scale=10):
+def compute_avg_rewards(savings_list, historical_data, alpha):
     eff_list = copy.copy(savings_list)
     for event in historical_data:
         # print(f"{event =}")
@@ -386,8 +388,6 @@ def compute_avg_rewards(savings_list, historical_data, alpha=0.5, scale=10):
         jNode = edge.end
         edgeReward = iNode.reward + jNode.reward
         # compute efficiency
-        #TODO: scale up the edgeReward component, which is <= 1
-        # edge.efficiency = alpha * edge.savings + (1 - alpha) * edgeReward * scale
         edge.efficiency = alpha * edge.savings + (1 - alpha) * edgeReward
     # sort the list of edges from higher to lower efficiency
     eff_list.sort(key = operator.attrgetter("efficiency"), reverse = True)
@@ -441,7 +441,7 @@ def assign_drones(route1, route2):
     # if they are equal and not None, simply return the unmodified routes
     return route1, route2
 
-def run_test(file_name, testSeed, printFigures=True):
+def run_test(file_name, train_episodes, alpha, testSeed, printFigures=True):
     # read instance data
     print("*** READING DATA ***")
     fleetSize, routeMaxCost, nodes = read_instance(file_name)
@@ -455,11 +455,13 @@ def run_test(file_name, testSeed, printFigures=True):
     # print(agent.act_table)
     print("*** SIMULATING DATA ***")
     # use the file name as seed to ensure that all test are based on the same historical data
-    historical_data = generate_historical_data(10, nodes, seed=file_name)
+    historical_data = generate_historical_data(train_episodes, nodes, seed=file_name)
     # print(historical_data)
     print("*** TRAINING AGENT ***")
     train_agent(agent, historical_data)
     # print(agent.act_table)
+    export_agent_to_file(agent, file_name)
+    export_historical_data(historical_data, file_name)
 
     print("*** RUNNING HEURISTIC ***")
     savings_list = generateSavingsList(nodes)
@@ -469,14 +471,13 @@ def run_test(file_name, testSeed, printFigures=True):
     # for node in nodes:
     #     print(f"{node}, {get_conditions(node, test_seed) =}")
 
-    scale = 100
     # compute benchmark
     print("*** COMPUTING BENCHMARK ***")
-    benchmark = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, historical_data, test_seed, scale=scale)   
+    benchmark = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, historical_data, test_seed, alpha)   
 
     # compute solution
     print("*** COMPUTING SOLUTION ***")
-    sol = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, agent, test_seed, scale=scale)   
+    sol = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, agent, test_seed, alpha)   
 
     # emulate proposed solutions
     print("*** RESULTS BENCHMARK ***")
@@ -500,13 +501,66 @@ def run_test(file_name, testSeed, printFigures=True):
 
     return benchmark.reward_sim, sol.reward_sim
 
+def run_test_with_agent(file_name, agent, historical_data, alpha, testSeed, printFigures=True):
+    # read instance data
+    print("*** READING DATA ***")
+    fleetSize, routeMaxCost, nodes = read_instance(file_name)
+
+    # seeds: instance > test > episode
+    instance_seed = file_name
+    test_seed = instance_seed+testSeed #TODO: to be read from the test file: represents the variablity for that particular test
+
+    print("*** RUNNING HEURISTIC ***")
+    savings_list = generateSavingsList(nodes)
+
+    # compute benchmark
+    print("*** COMPUTING BENCHMARK ***")
+    benchmark = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, historical_data, test_seed, alpha)   
+
+    # compute solution
+    print("*** COMPUTING SOLUTION ***")
+    sol = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, agent, test_seed, alpha)   
+
+    # emulate proposed solutions
+    print("*** RESULTS BENCHMARK ***")
+    # printRoutes(benchmark)
+    emulation(benchmark, routeMaxCost, test_seed)
+    # print(benchmark)
+
+    print("*** RESULTS SOLUTION ***")
+    # printRoutes(sol)
+    emulation(sol, routeMaxCost, test_seed)
+    # print(sol)
+    
+    if printFigures:
+        figure1 = graphRoutes(nodes, benchmark, test_seed)
+        figure2 = graphRoutes(nodes, sol, test_seed)
+        figure1.show()
+        figure2.show()
+    
+    return benchmark.reward_sim, sol.reward_sim
+
+
 if __name__ == "__main__":
 
     # file_name = r"data/p1.2.a.txt"
-    file_name = r"data/test_instance_03.txt"
+    file_name = r"data/test_instance_01.txt"
+    ALPHA = 0.01 # parameter to control the importance of expected rewards vs. savings in efficiency calculation
+    TEST_SEED = str(3)
 
     # single run / offline-training
-    # run_test(file_name, testSeed=str(0))
+    run_test(file_name, train_episodes=10, alpha=ALPHA, testSeed=TEST_SEED)
+
+    # single run / offline-training - from trained agent
+    # _, _, nodes = read_instance(file_name)
+    # agent = Agent(nodes) # initialize agent
+    # try:
+    #     agent = import_agent_from_file(agent, file_name)
+    #     historical_data = import_historical_data(file_name)
+    #     run_test_with_agent(file_name, agent, historical_data, alpha=ALPHA, testSeed=TEST_SEED)
+    # except:
+    #     print("ERROR| no historical data or trained agent available")
+
 
     # multi-run / offline-training
     # for i in range(5):
@@ -528,7 +582,7 @@ if __name__ == "__main__":
     # print(ttest)
 
     # multistart / online-training
-    benchmark, sol = multistart(file_name, n_episodes=200, testSeed=str(1))
-    print(benchmark)
-    print(sol)
+    # benchmark, sol = multistart(file_name, n_episodes=500, alpha=ALPHA, testSeed=TEST_SEED)
+    # print(benchmark)
+    # print(sol)
 
