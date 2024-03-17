@@ -119,9 +119,9 @@ def extract_hist_data(nodes, seed):
     hist_data = []
     for node in nodes:
         weather = get_conditions(node.ID, seed)
-        [wind_c, rain_c, visi_c, temp_c] = weather
-        _, reward = getBinaryRandomReward(node_id=node.ID, wind=wind_c, rain=rain_c, visi=visi_c, temp=temp_c, seed=seed, verbose=False)
-        hist_data.append([node.ID, wind_c, rain_c, visi_c, temp_c, reward])
+        [wind_c, rain_c] = weather
+        _, reward = getBinaryRandomReward(node_id=node.ID, wind=wind_c, rain=rain_c, seed=seed, verbose=False)
+        hist_data.append([node.ID, wind_c, rain_c, reward])
         
     return hist_data
 
@@ -345,15 +345,15 @@ def compute_efficiency(savings_list, rl_agent, inst_seed, alpha):
         # jRoute = jNode.inRoute
         # determine dynamic conditions for each node
         i_weather = get_conditions(iNode, inst_seed)
-        [wind_i, rain_i, visi_i, temp_i] = i_weather
+        [wind_i, rain_i] = i_weather
         j_weather = get_conditions(jNode, inst_seed)
-        [wind_j, rain_j, visi_j, temp_j] = j_weather
+        [wind_j, rain_j] = j_weather
         #TODO: check that drone type is (1) the same in both routes, (2) allowed - number of drones is limited
         # iRoute, jRoute = assign_drones(iRoute, jRoute)
         # drone = iRoute.drone_type
         # determine rewards
-        iNode.reward = rl_agent.get_estimated_reward(iNode, wind_i, rain_i, visi_i, temp_i)
-        jNode.reward = rl_agent.get_estimated_reward(jNode, wind_j, rain_j, visi_j, temp_j)
+        iNode.reward = rl_agent.get_estimated_reward(iNode, wind_i, rain_i)
+        jNode.reward = rl_agent.get_estimated_reward(jNode, wind_j, rain_j)
         edgeReward = iNode.reward + jNode.reward
         # compute efficiency
         edge.efficiency = alpha * edge.savings + (1 - alpha) * edgeReward
@@ -544,12 +544,12 @@ def run_test_with_agent(file_name, agent, historical_data, alpha, testSeed, prin
 if __name__ == "__main__":
 
     # file_name = r"data/p1.2.a.txt"
-    file_name = r"data/test_instance_01.txt"
+    file_name = r"data/test_instance_03.txt"
     ALPHA = 0.01 # parameter to control the importance of expected rewards vs. savings in efficiency calculation
     TEST_SEED = str(3)
 
     # single run / offline-training
-    run_test(file_name, train_episodes=10, alpha=ALPHA, testSeed=TEST_SEED)
+    # run_test(file_name, train_episodes=10, alpha=ALPHA, testSeed=TEST_SEED)
 
     # single run / offline-training - from trained agent
     # _, _, nodes = read_instance(file_name)
@@ -563,17 +563,31 @@ if __name__ == "__main__":
 
 
     # multi-run / offline-training
-    # for i in range(5):
-    #     print(f"{i =}")
-    #     run_test(file_name,str(i))
+    _, _, nodes = read_instance(file_name)
+    agent = Agent(nodes) # initialize agent
+    for i in range(4):
+        print(f"{i =}")
+        try:
+            agent = import_agent_from_file(agent, file_name)
+            historical_data = import_historical_data(file_name)
+            run_test_with_agent(file_name, agent, historical_data, alpha=ALPHA, testSeed=TEST_SEED+str(i), printFigures=True)
+        except:
+            run_test(file_name, train_episodes=10, alpha=ALPHA, testSeed=TEST_SEED+str(i), printFigures=True)
 
     # statistical significance test / offline-training
+    # _, _, nodes = read_instance(file_name)
+    # agent = Agent(nodes) # initialize agent
     # print(f"T-TEST for {file_name}")
     # ben_res = []
     # sol_res = []
     # for i in range(20):
     #     print(f"{i =}")
-    #     ben, sol = run_test(file_name,str(i),printFigures=False)
+    #     try:
+    #         agent = import_agent_from_file(agent, file_name)
+    #         historical_data = import_historical_data(file_name)
+    #         ben, sol = run_test_with_agent(file_name, agent, historical_data, alpha=ALPHA, testSeed=TEST_SEED+str(i), printFigures=False)
+    #     except:
+    #         ben, sol = run_test(file_name, train_episodes=10, alpha=ALPHA, testSeed=TEST_SEED+str(i), printFigures=False)
     #     ben_res.append(ben)
     #     sol_res.append(sol)
     # print(f"{ben_res =}")

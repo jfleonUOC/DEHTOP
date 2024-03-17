@@ -12,8 +12,9 @@ class Agent:
         self.weather = weather
 
         # weather
-        wind = rain = visi = temp = [-2, -1, 0, 1, 2]
-        self.weather.extend([wind, rain, visi, temp])
+        # wind = rain = visi = temp = [-2, -1, 0, 1, 2]
+        wind = rain = [-1, 0, 1]
+        self.weather.extend([wind, rain])
 
         # Initialize action-value table with zeros
         self.act_table = self.initialize_act_table()
@@ -22,19 +23,18 @@ class Agent:
         """ Initialize the action-value table with zeros """
         node_list = [node.ID for node in self.nodes]
         combinations = list(product(node_list, *self.weather, [0], [0]))
-        columns_names = ["nodes", "wind", "rain", "visi", "temp", "value", "visited"]
+        # columns_names = ["nodes", "wind", "rain", "visi", "temp", "value", "visited"]
+        columns_names = ["nodes", "wind", "rain", "value", "visited"]
         table = pd.DataFrame(combinations, columns=columns_names)
 
         return table
 
-    def update_act_value(self, node, wind, rain, visi, temp, reward):
+    def update_act_value(self, node, wind, rain, reward):
         """ action-value update using the sample-average method """
         # columns_names = ["nodes", "wind", "rain", "visi", "temp", "value", "visited"]
         row_index = self.act_table.loc[(self.act_table["nodes"] == node)
                                        & (self.act_table["wind"] == wind)
                                        & (self.act_table["rain"] == rain)
-                                       & (self.act_table["visi"] == visi)
-                                       & (self.act_table["temp"] == temp)
                                        ].index.item()
         old_avg = self.act_table.at[row_index,"value"] 
         old_count = self.act_table.at[row_index,"visited"] 
@@ -43,14 +43,12 @@ class Agent:
         self.act_table.at[row_index,"value"] = new_avg
         self.act_table.at[row_index,"visited"] = new_count
 
-    def get_estimated_reward(self, node, wind, rain, visi, temp):
+    def get_estimated_reward(self, node, wind, rain):
         """ Extract from Q-table the estimated reward for a given node and set of weather conditions """
         # columns_names = ["nodes", "wind", "rain", "visi", "temp", "value", "visited"]
         reward = self.act_table.loc[(self.act_table["nodes"] == node.ID)
                                     & (self.act_table["wind"] == wind)
                                     & (self.act_table["rain"] == rain)
-                                    & (self.act_table["visi"] == visi)
-                                    & (self.act_table["temp"] == temp)
                                     ]["value"].item()
 
         return reward
@@ -60,8 +58,9 @@ def generate_historical_data(n_events, nodes, seed):
     # simulate every combination n_event number of times
     historical_data = []
     node_list = [node.ID for node in nodes]
-    wind = rain = visi = temp = [-2, -1, 0, 1, 2]
-    combinations = list(product(node_list, wind, rain, visi, temp))
+    # wind = rain = visi = temp = [-2, -1, 0, 1, 2]
+    wind = rain = [-1, 0, 1]
+    combinations = list(product(node_list, wind, rain))
     # print(combinations)
     for i in tqdm(range(n_events)):
         for comb in combinations:
@@ -76,8 +75,9 @@ def train_agent(agent, historical_data, verbose=True):
     """ Train the agent based on historical data """
     for event in tqdm(historical_data, disable=not verbose):
         # columns_names = ["nodes", "wind", "rain", "visi", "temp", "value", "visited"]
-        node, wind, rain, visi, temp, reward = event
-        agent.update_act_value(node, wind, rain, visi, temp, reward)
+        # node, wind, rain, visi, temp, reward = event
+        node, wind, rain, reward = event
+        agent.update_act_value(node, wind, rain, reward)
     return
 
 def export_agent_to_file(agent, output, verbose=True):
@@ -128,4 +128,4 @@ if __name__ == "__main__":
     # print(historical_data)
     train_agent(agent, historical_data)
     print(agent.act_table)
-    print(agent.get_estimated_reward(node=nodes[0], wind=-2, rain=-2, visi=-2, temp=-2))
+    print(agent.get_estimated_reward(node=nodes[0], wind=-1, rain=-1))

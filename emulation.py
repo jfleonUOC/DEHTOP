@@ -16,9 +16,9 @@ def emulation(sol, routeMaxCost, seed, print_results=True):
         for e in route.edges[:-1]:
             node = e.end # end node of the edge
             weather = get_conditions(node.ID, seed)
-            [wind_c, rain_c, visi_c, temp_c] = weather
+            [wind_c, rain_c] = weather
             # prob, reward = getBinaryRandomReward(node.ID, weather, seed=seed)
-            prob, reward = getBinaryRandomReward(node_id=node.ID, wind=wind_c, rain=rain_c, visi=visi_c, temp=temp_c, seed=seed, verbose=False)
+            prob, reward = getBinaryRandomReward(node_id=node.ID, wind=wind_c, rain=rain_c, seed=seed, verbose=False)
             node.realReward = reward
             node.probability = prob
             routeReward += reward
@@ -35,10 +35,10 @@ def emulation(sol, routeMaxCost, seed, print_results=True):
     if print_results: printEmuRoutes(sol)
 
 
-def getBinaryRandomReward(node_id, wind, rain, visi, temp, seed, verbose=False):
+def getBinaryRandomReward_old(node_id, wind, rain, seed, verbose=False):
     """ Generates the binary random reward for node based on conditions """
     # create weather as a list with the different conditions
-    weather = [wind, rain, visi, temp]
+    weather = [wind, rain]
     num_coeffs = len(weather)
     coeffs = getCoefficients(node_id, seed, num_coeffs)
     # print(f"{coeffs =}")
@@ -51,6 +51,29 @@ def getBinaryRandomReward(node_id, wind, rain, visi, temp, seed, verbose=False):
         print(f"seed: {seed}; probability: {prob}; reward: {reward}")
 
     return prob, reward
+
+def getBinaryRandomReward(node_id, wind, rain, seed, verbose=False):
+    """ Generates the binary random reward for node based on conditions """
+    # create weather as a list with the different conditions
+    weather = [wind, rain]
+    prob = prob_sum(wind, rain)
+    weather_str = "".join(str(i) for i in weather) # string that represents weather conditions
+    random.seed(seed + str(node_id) + weather_str)
+    [reward] = random.choices([0,1],[1-prob, prob])
+    if verbose:
+        print(f"seed: {seed}; probability: {prob}; reward: {reward}")
+
+    return prob, reward
+
+def prob_sum(wind, rain):
+    """ Returns probability based on weather conditions """
+    return {
+        2 : 1.00,
+        1 : 0.85,
+        0 : 0.50,
+        -1: 0.15,
+        -2: 0.00,
+    }[wind + rain]
 
 def getCoefficients(node_id, seed, num_coeffs):
     """ Obtains the coefficients for a given node """
@@ -68,8 +91,8 @@ def get_conditions(node_id, seed):
     # possible conditions: wind, waves, visibility, rain, temperature
     # columns_names = ["nodes", "wind", "rain", "visi", "temp", "value", "visited"]
     random.seed(seed + str(node_id))
-    wind = rain = visi = temp = random.randint(-2, 2)
-    weather = [wind, rain, visi, temp]
+    wind = rain = random.randint(-1, 1)
+    weather = [wind, rain]
 
     return weather
 
@@ -89,12 +112,11 @@ def printEmuRoutes(sol):
 
 
 if __name__ == "__main__":
-    seed = "test_instance.txt48270"
+    seed = "test_instance.tt4827h2"
     node = Node(ID=1, x=0, y=0, reward=0)
     weather = get_conditions(node.ID, seed)
-    [wind_c, rain_c, visi_c, temp_c] = weather
-    prob, reward = getBinaryRandomReward(node_id=node.ID, wind=wind_c, rain=rain_c, visi=visi_c, temp=temp_c, seed=seed, verbose=True)
-    print(f"{prob =}, {reward =}")
+    [wind_c, rain_c] = weather
+    prob, reward = getBinaryRandomReward(node_id=node.ID, wind=wind_c, rain=rain_c, seed=seed, verbose=True)
 
     # seed = "test_instance.txt4827"
     # instance_seed = re.match("^(.*?)txt",seed).group(0)
