@@ -10,6 +10,7 @@ from aux_objects import Node
 def emulation(sol, routeMaxCost, seed, print_results=True):
     # This code assumes binary random rewards on each node 
     sol.reward_sim = 0
+    # print(f"emulation seed: {seed}")
     for route in sol.routes:
         routeReward = 0 # route reward in this run
         routeCost = 0 # time- or distance-based cost
@@ -17,10 +18,12 @@ def emulation(sol, routeMaxCost, seed, print_results=True):
             node = e.end # end node of the edge
             weather = get_conditions(node.ID, seed)
             [wind_c, rain_c] = weather
+            # print(f"node: {node}; weather: {weather}")
             # prob, reward = getBinaryRandomReward(node.ID, weather, seed=seed)
             prob, reward = getBinaryRandomReward(node_id=node.ID, wind=wind_c, rain=rain_c, seed=seed, verbose=False)
             node.realReward = reward
             node.probability = prob
+            # print(f"node: {node}; reward: {node.realReward}; probability: {node.probability}")
             routeReward += reward
             # if reward != 0: print(f"node with reward: {node} ; weather = {weather}")
             edgeCost = e.cost
@@ -58,7 +61,9 @@ def getBinaryRandomReward(node_id, wind, rain, seed, verbose=False):
     weather = [wind, rain]
     prob = prob_sum(wind, rain)
     weather_str = "".join(str(i) for i in weather) # string that represents weather conditions
-    random.seed(seed + str(node_id) + weather_str)
+    bin_seed = seed + str(node_id) + weather_str
+    # print(f"getBinaryRandomReward seed: {bin_seed}")
+    random.seed(bin_seed)
     [reward] = random.choices([0,1],[1-prob, prob])
     if verbose:
         print(f"seed: {seed}; probability: {prob}; reward: {reward}")
@@ -70,8 +75,8 @@ def prob_sum(wind, rain):
     return {
         2 : 1.00,
         1 : 0.85,
-        0 : 0.50,
-        -1: 0.15,
+        0 : 0.20,
+        -1: 0.10,
         -2: 0.00,
     }[wind + rain]
 
@@ -90,7 +95,9 @@ def get_conditions(node_id, seed):
     """ Obtain weather conditions for instance seed at given node """
     # possible conditions: wind, waves, visibility, rain, temperature
     # columns_names = ["nodes", "wind", "rain", "visi", "temp", "value", "visited"]
-    random.seed(seed + str(node_id))
+    cond_seed = seed + str(node_id)
+    # print(f"get_conditions seed: {cond_seed}")
+    random.seed(cond_seed)
     wind = rain = random.randint(-1, 1)
     weather = [wind, rain]
 

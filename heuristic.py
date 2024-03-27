@@ -65,7 +65,7 @@ def multistart(file_name, n_episodes, alpha, testSeed=str(0)):
         # print(f"* COMPUTING EPISODE {episode} *")
         episode_seed = test_seed+str(episode)
 
-        sol = compute_sol(fleetSize, routeMaxCost, nodes_sol, savings_list_sol, agent, episode_seed, alpha, offline=True, verbose=False)   
+        sol = compute_sol(fleetSize, routeMaxCost, nodes_sol, savings_list_sol, agent, episode_seed, alpha, offline=False, verbose=False)   
         emulation(sol, routeMaxCost, episode_seed, print_results=False)
 
         # add historical data only for the visited nodes
@@ -212,6 +212,7 @@ def compute_sol(fleetSize, routeMaxCost, nodes, sav_list, agent, seed, alpha, of
     """ Perform the BR edge-selection & routing-merging iterative process """
     sol = dummySolution(routeMaxCost, nodes) # compute the dummy solution
     savList = copy.copy(sav_list) # make a shallow copy of the savings list since it will be modified
+    # print(f"compute_sol seed: {seed}")
 
     if isinstance(agent, list): # no RL agent, but historical data -> use savings
         # use historical records to recompute the efficiency based on average reward for each node
@@ -344,10 +345,11 @@ def compute_efficiency(savings_list, rl_agent, inst_seed, alpha):
         # iRoute = iNode.inRoute
         # jRoute = jNode.inRoute
         # determine dynamic conditions for each node
-        i_weather = get_conditions(iNode, inst_seed)
+        i_weather = get_conditions(iNode.ID, inst_seed)
         [wind_i, rain_i] = i_weather
-        j_weather = get_conditions(jNode, inst_seed)
+        j_weather = get_conditions(jNode.ID, inst_seed)
         [wind_j, rain_j] = j_weather
+        # print(f"compute_efficiency seed: {inst_seed}")
         #TODO: check that drone type is (1) the same in both routes, (2) allowed - number of drones is limited
         # iRoute, jRoute = assign_drones(iRoute, jRoute)
         # drone = iRoute.drone_type
@@ -408,6 +410,8 @@ def find_node_in_eff_list(nodeID, efficiencyList, verbose=False):
 
 def epsilonGreedy(eff_list, epsilon = 0.1):
     random.seed(None) # initialize the random seed for the purpose of RL agent selection
+    #TODO: extract epsilon as a global parameter
+    epsilon = 0.1
     if random.random() < epsilon:
         # Explore: Select a random edge
         action = random.choice(eff_list)
@@ -421,25 +425,6 @@ def UBC(eff_list):
     random.seed(None) # initialize the random seed for the purpose of RL agent selection
     pass
 
-def assign_drones(route1, route2):
-    """
-    Function to assign the correct drone type to each route before merging
-    """
-    if route1.drone_type != route2.drone_type: 
-        if route1.drone_type == None: # means that the other is already assigned
-            route1.drone_type = route2.drone_type
-        elif route2.drone_type == None: # means that the other is already assigned
-            route2.drone_type = route1.drone_type
-        else: # both are not None but different -> longer route wins; if equals, route1 wins
-            if len(route1.edges) >= (route2.edges):
-                route2.drone_type = route1.drone_type
-            else:
-                route1.drone_type = route2.drone_type
-    elif route1.drone_type == None: # both are None -> assign "A" (aerial) by default
-        route1.drone_type = "A"
-        route2.drone_type = "A"
-    # if they are equal and not None, simply return the unmodified routes
-    return route1, route2
 
 def run_test(file_name, train_episodes, alpha, testSeed, printFigures=True):
     # read instance data
@@ -544,12 +529,13 @@ def run_test_with_agent(file_name, agent, historical_data, alpha, testSeed, prin
 if __name__ == "__main__":
 
     # file_name = r"data/p1.2.a.txt"
-    file_name = r"data/test_instance_03.txt"
+    # file_name = r"data/test_instance_03.txt"
+    file_name = r"data/test_instance_v1_s1.txt"
     ALPHA = 0.01 # parameter to control the importance of expected rewards vs. savings in efficiency calculation
-    TEST_SEED = str(3)
+    TEST_SEED = str(2)
 
     # single run / offline-training
-    # run_test(file_name, train_episodes=10, alpha=ALPHA, testSeed=TEST_SEED)
+    # run_test(file_name, train_episodes=20, alpha=ALPHA, testSeed=TEST_SEED)
 
     # single run / offline-training - from trained agent
     # _, _, nodes = read_instance(file_name)
@@ -563,16 +549,16 @@ if __name__ == "__main__":
 
 
     # multi-run / offline-training
-    _, _, nodes = read_instance(file_name)
-    agent = Agent(nodes) # initialize agent
-    for i in range(4):
-        print(f"{i =}")
-        try:
-            agent = import_agent_from_file(agent, file_name)
-            historical_data = import_historical_data(file_name)
-            run_test_with_agent(file_name, agent, historical_data, alpha=ALPHA, testSeed=TEST_SEED+str(i), printFigures=True)
-        except:
-            run_test(file_name, train_episodes=10, alpha=ALPHA, testSeed=TEST_SEED+str(i), printFigures=True)
+    # _, _, nodes = read_instance(file_name)
+    # agent = Agent(nodes) # initialize agent
+    # for i in range(4):
+    #     print(f"{i =}")
+    #     try:
+    #         agent = import_agent_from_file(agent, file_name)
+    #         historical_data = import_historical_data(file_name)
+    #         run_test_with_agent(file_name, agent, historical_data, alpha=ALPHA, testSeed=TEST_SEED+str(i), printFigures=True)
+    #     except:
+    #         run_test(file_name, train_episodes=10, alpha=ALPHA, testSeed=TEST_SEED+str(i), printFigures=True)
 
     # statistical significance test / offline-training
     # _, _, nodes = read_instance(file_name)
@@ -596,7 +582,7 @@ if __name__ == "__main__":
     # print(ttest)
 
     # multistart / online-training
-    # benchmark, sol = multistart(file_name, n_episodes=500, alpha=ALPHA, testSeed=TEST_SEED)
-    # print(benchmark)
-    # print(sol)
+    benchmark, sol = multistart(file_name, n_episodes=500, alpha=ALPHA, testSeed=TEST_SEED)
+    print(benchmark)
+    print(sol)
 

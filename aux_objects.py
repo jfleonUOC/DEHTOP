@@ -26,7 +26,7 @@ class Node:
         self.isLinkedToStart = False # linked to start depot?
         self.isLindedToFinish = False # linked to finish depot?
         self.timesVisited = 0 # how many times has been the node visited in the past
-        self.probability = 0 # what is the probability of getting a reward
+        self.probability = None # what is the probability of getting a reward
         self.realReward = 0 # real reward during emulation
 
     def __str__(self):
