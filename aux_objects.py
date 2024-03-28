@@ -45,6 +45,7 @@ class Edge:
         self.invEdge = None # inverse edge (arc)
         self.efficiency = 0.0 # edge efficiency (enriched savings)
         self.type = 0 # 0 = deterministic (default), 1 = stoch, 2 = dynamic
+        self.UCB = float("inf") # used for UCB algorithm, the default is infinite
 
     def __str__(self):
         return f"Edge {self.origin.ID}-{self.end.ID} (c:{self.cost:.2f}, s:{self.savings:.2f}, e:{self.efficiency:.2f})"

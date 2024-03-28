@@ -18,7 +18,7 @@ from emulation import emulation, get_conditions, getBinaryRandomReward
                     MULTI-START FRAMEWORK
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-def multistart(file_name, n_episodes, alpha, testSeed=str(0)):
+def multistart(file_name, n_episodes, alpha, alg, testSeed=str(0)):
     """ Online learning along N episodes """
     # read instance data
     print("*** READING DATA ***")
@@ -50,7 +50,7 @@ def multistart(file_name, n_episodes, alpha, testSeed=str(0)):
         # print(f"* COMPUTING EPISODE {episode} *")
         episode_seed = test_seed+str(episode)
 
-        benchmark = compute_sol(fleetSize, routeMaxCost, nodes_ben, savings_list_ben, historical_data, episode_seed, alpha, verbose=False)   
+        benchmark = compute_sol(fleetSize, routeMaxCost, nodes_ben, savings_list_ben, None, historical_data, episode_seed, alpha, verbose=False)   
         emulation(benchmark, routeMaxCost, episode_seed, print_results=False)
 
         # add historical data only for the visited nodes
@@ -59,13 +59,14 @@ def multistart(file_name, n_episodes, alpha, testSeed=str(0)):
         historical_data.extend(new_historical_data)
 
         ben_episode_reward.append(benchmark.reward_sim)
-    
+        # print(f"lenght historical data: {len(historical_data)}")
+
     # compute solution
     for episode in tqdm(range(n_episodes)):
         # print(f"* COMPUTING EPISODE {episode} *")
         episode_seed = test_seed+str(episode)
 
-        sol = compute_sol(fleetSize, routeMaxCost, nodes_sol, savings_list_sol, agent, episode_seed, alpha, offline=False, verbose=False)   
+        sol = compute_sol(fleetSize, routeMaxCost, nodes_sol, savings_list_sol, agent, historical_data, episode_seed, alpha, alg=alg, verbose=False)   
         emulation(sol, routeMaxCost, episode_seed, print_results=False)
 
         # add historical data only for the visited nodes
@@ -208,37 +209,41 @@ def dummySolution(routeMaxCost, nodes):
             MERGING PROCESS IN THE PJ'S HEURISTIC
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-def compute_sol(fleetSize, routeMaxCost, nodes, sav_list, agent, seed, alpha, offline=True, verbose=False):
+def compute_sol(fleetSize, routeMaxCost, nodes, sav_list, agent, hist_data, seed, alpha, alg = 0, verbose=False):
     """ Perform the BR edge-selection & routing-merging iterative process """
+    # alg = 0 -> greedy; alg = 1 -> epsilon-greedy; alg = 2 -> UCB
     sol = dummySolution(routeMaxCost, nodes) # compute the dummy solution
     savList = copy.copy(sav_list) # make a shallow copy of the savings list since it will be modified
     # print(f"compute_sol seed: {seed}")
 
-    if isinstance(agent, list): # no RL agent, but historical data -> use savings
+    # if isinstance(agent, list): # no RL agent, but historical data -> use savings
         # use historical records to recompute the efficiency based on average reward for each node
-        savList = compute_avg_rewards(savList, agent, alpha)
+    if agent == None: # no RL agent, but historical data -> use savings
+        savList = compute_avg_rewards(savList, hist_data, alpha)
         if verbose:
-            print(agent)
+            print(hist_data)
             for node in nodes:
                 print(f"{node}, {node.reward =}, {node.timesVisited}")
         use_agent = False
     else: # use RL agent
-        savList = compute_efficiency(savList, agent, seed, alpha)
         use_agent = True
+        if alg == 1:
+            savList = compute_efficiency(savList, agent, seed, alpha)
+        if alg == 2:
+            savList = calculate_UCB(savList, agent, seed)
     
-
     progress_bar = tqdm(total=len(sav_list), desc="Processing", disable=not verbose)
     while len(savList) > 0: # list is not empty
         # The merging node is selected based on the reinf. learning algorithm
         # instead of a on biased-randomized position of an ordered efficiency list
         # recalculate effList
-        if not use_agent:
+        if not use_agent or alg == 0: # greedy behaviour
             ijEdge = savList[0]
         else: # use RL agent
-            if offline:
-                ijEdge = select_edge(savList, alg=0)
-            else:
-                ijEdge = select_edge(savList, alg=1)
+            if alg == 1:
+                ijEdge = epsilonGreedy(savList)
+            elif alg == 2:
+                ijEdge = UCB(savList)
         if verbose:
             print(f"* Efficiency list lenght: {len(savList)} *")
             print(f"> merging {ijEdge}")
@@ -324,16 +329,17 @@ def checkMergingConditions(iNode, jNode, iRoute, jRoute, ijEdge, routeMaxCost, v
     # else, merging is feasible
     return True
 
-def select_edge(savings_list, alg = 0):
-    """ Select edge to merge based on (alg=1) epsilon-greedy or (alg=2) Upper Confidence Bounds """
-    efficiency_list = savings_list
-    if alg == 0: # 0. Greedy (offline training)
-        edge = efficiency_list[0]
-    elif alg == 1: # 1. Epsilon-greedy
-        edge = epsilonGreedy(efficiency_list)
-    else: # 2. Upper Confidence Bounds
-        edge = UBC(efficiency_list)
-    return edge
+# def select_edge(savings_list, agent, historical_data, inst_seed, alg = 0):
+#     """ Select edge to merge based on (alg=1) epsilon-greedy or (alg=2) Upper Confidence Bounds """
+#     # TODO: integrate above to reduce calculation time
+#     efficiency_list = savings_list
+#     if alg == 0: # 0. Greedy (offline training)
+#         edge = efficiency_list[0]
+#     elif alg == 1: # 1. Epsilon-greedy
+#         edge = epsilonGreedy(efficiency_list)
+#     else: # 2. Upper Confidence Bounds
+#         edge = UCB(efficiency_list, agent, historical_data, inst_seed)
+#     return edge
 
 def compute_efficiency(savings_list, rl_agent, inst_seed, alpha):
     eff_list = copy.copy(savings_list)
@@ -421,9 +427,41 @@ def epsilonGreedy(eff_list, epsilon = 0.1):
 
     return action
 
-def UBC(eff_list):
-    random.seed(None) # initialize the random seed for the purpose of RL agent selection
-    pass
+def calculate_UCB(eff_list, rl_agent, inst_seed):
+    """ Upper Confidence Bound algorithm """
+    # count = 0
+    edge_list = copy.copy(eff_list)
+    # for edge in edge_list[:20]:
+    for edge in edge_list:
+        # if edge.UCB == float("inf"):
+        iNode = edge.origin
+        jNode = edge.end
+        i_weather = get_conditions(iNode.ID, inst_seed)
+        [wind_i, rain_i] = i_weather
+        j_weather = get_conditions(jNode.ID, inst_seed)
+        [wind_j, rain_j] = j_weather
+        # determine rewards
+        iValue = rl_agent.get_estimated_reward(iNode, wind_i, rain_i)
+        jValue = rl_agent.get_estimated_reward(jNode, wind_j, rain_j)
+        iTimes = rl_agent.get_times_visited(iNode, wind_i, rain_i)
+        jTimes = rl_agent.get_times_visited(jNode, wind_j, rain_j)
+        tTimes = rl_agent.get_total_visited()
+        iNode_UCB = iValue + np.sqrt((2 * tTimes) / (iTimes + 1e-5))
+        jNode_UCB = jValue + np.sqrt((2 * tTimes) / (jTimes + 1e-5))
+        # compute upper confidence bound of the edge as the sum of the UCB of the nodes
+        edge.UCB = iNode_UCB + jNode_UCB
+        # count += 1
+    # print(f"new iteration: count: {count}")
+    # sort the list of edges from higher to lower efficiency and take the first one
+    edge_list.sort(key = operator.attrgetter("UCB"), reverse = True)
+    # action = edge_list[0]
+
+    return edge_list
+
+def UCB(edge_list):
+    action = edge_list[0]
+
+    return action
 
 
 def run_test(file_name, train_episodes, alpha, testSeed, printFigures=True):
@@ -458,11 +496,11 @@ def run_test(file_name, train_episodes, alpha, testSeed, printFigures=True):
 
     # compute benchmark
     print("*** COMPUTING BENCHMARK ***")
-    benchmark = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, historical_data, test_seed, alpha)   
+    benchmark = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, None, historical_data, test_seed, alpha)   
 
     # compute solution
     print("*** COMPUTING SOLUTION ***")
-    sol = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, agent, test_seed, alpha)   
+    sol = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, agent, historical_data, test_seed, alpha)   
 
     # emulate proposed solutions
     print("*** RESULTS BENCHMARK ***")
@@ -500,11 +538,11 @@ def run_test_with_agent(file_name, agent, historical_data, alpha, testSeed, prin
 
     # compute benchmark
     print("*** COMPUTING BENCHMARK ***")
-    benchmark = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, historical_data, test_seed, alpha)   
+    benchmark = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, None, historical_data, test_seed, alpha)   
 
     # compute solution
     print("*** COMPUTING SOLUTION ***")
-    sol = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, agent, test_seed, alpha)   
+    sol = compute_sol(fleetSize, routeMaxCost, nodes, savings_list, agent, historical_data, test_seed, alpha)   
 
     # emulate proposed solutions
     print("*** RESULTS BENCHMARK ***")
@@ -530,7 +568,7 @@ if __name__ == "__main__":
 
     # file_name = r"data/p1.2.a.txt"
     # file_name = r"data/test_instance_03.txt"
-    file_name = r"data/test_instance_v1_s1.txt"
+    file_name = r"data/test_instance_v3_s1.txt"
     ALPHA = 0.01 # parameter to control the importance of expected rewards vs. savings in efficiency calculation
     TEST_SEED = str(2)
 
@@ -546,7 +584,6 @@ if __name__ == "__main__":
     #     run_test_with_agent(file_name, agent, historical_data, alpha=ALPHA, testSeed=TEST_SEED)
     # except:
     #     print("ERROR| no historical data or trained agent available")
-
 
     # multi-run / offline-training
     # _, _, nodes = read_instance(file_name)
@@ -582,7 +619,8 @@ if __name__ == "__main__":
     # print(ttest)
 
     # multistart / online-training
-    benchmark, sol = multistart(file_name, n_episodes=500, alpha=ALPHA, testSeed=TEST_SEED)
+    # alg = 0 -> greedy; alg = 1 -> epsilon-greedy; alg = 2 -> UCB
+    benchmark, sol = multistart(file_name, n_episodes=50, alpha=ALPHA, alg=1, testSeed=TEST_SEED)
     print(benchmark)
     print(sol)
 

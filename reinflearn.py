@@ -53,6 +53,21 @@ class Agent:
 
         return reward
 
+    def get_times_visited(self, node, wind, rain):
+        """ Extract from Q-table the number of time a node-weather is visited """
+        n_times = self.act_table.loc[(self.act_table["nodes"] == node.ID)
+                                    & (self.act_table["wind"] == wind)
+                                    & (self.act_table["rain"] == rain)
+                                    ]["visited"].item()
+
+        return n_times
+
+    def get_total_visited(self):
+        """ Extract the total number of times the agent has learned from events """
+        tot_visited = self.act_table["visited"].sum()
+
+        return tot_visited
+
 def generate_historical_data(n_events, nodes, seed):
     """ Generate historical data to train the agent """
     # simulate every combination n_event number of times
